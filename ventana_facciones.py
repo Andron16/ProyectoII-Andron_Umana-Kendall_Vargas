@@ -172,7 +172,5 @@ class PantallaFacciones(tk.Frame):
             self.controlador.mostrar(lambda p, c: PantallaFacciones(p, c, turno=2))
         else:
             self.controlador.faccion_atacante = fac
-            # TEMPORAL: aqui ira la ventana del juego.
-            messagebox.showinfo("¡Listos!", f"Defensor: {self.controlador.faccion_defensor.nombre}"
-                                f"\nAtacante: {self.controlador.faccion_atacante.nombre}"
-                                f"\n\n¡Comienza la partida!")
+            from ventana_juego import PantallaJuego
+            self.controlador.mostrar(PantallaJuego)
