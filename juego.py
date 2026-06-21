@@ -160,3 +160,104 @@ class Juego:
             gestor.actualizar_victoria(jd.nombre, "defensor")
         else:
             gestor.actualizar_victoria(ja.nombre, "atacante")
+    
+    #E: (usa self.ronda)
+    #S: no retorna; aplica los ingresos y cambia a FASE_CONSTRUCCION
+    #R: ninguna
+    def iniciar_ronda(self):
+        self.fase = Juego.FASE_CONSTRUCCION
+        self.ingresos_inicio_ronda()
+
+    #E: (no recibe parametros)
+    #S: no retorna; cierra la fase de construccion y pasa a FASE_COLOCACION
+    #R: debe estar en FASE_CONSTRUCCION
+    def terminar_construccion(self):
+        if self.fase != Juego.FASE_CONSTRUCCION:
+            return
+        self.fase = Juego.FASE_COLOCACION
+
+    #E: (no recibe parametros)
+    #S: no retorna; cierra la fase de colocacion y pasa a FASE_COMBATE
+    #R: debe estar en FASE_COLOCACION
+    def terminar_colocacion(self):
+        if self.fase != Juego.FASE_COLOCACION:
+            return
+        self.fase = Juego.FASE_COMBATE
+        self.combate_activo = True   # el motor del compañero usa este flag para arrancar
+
+    #E: (no recibe parametros)
+    #S: no retorna; avanza al numero de ronda siguiente y la inicia
+    #R: debe estar en FASE_FIN; solo se llama si la partida aun no termino
+    def siguiente_ronda(self):
+        if self.fase != Juego.FASE_FIN:
+            return
+        self.ronda += 1
+        self.combate_activo = False
+        self.iniciar_ronda()
+    
+    # HABILIDADES DE UNIDADES
+    # Cada habilidad se activa cuando unidad.tiempo_restante llega a 0.
+    # El motor del compañero llama a self.activar_habilidad_unidad(unidad)
+    # y aqui se despacha segun el tipo. Una habilidad por tipo, como pide
+    # el enunciado.
+
+    #E: unidad (Unidad cuyo cooldown llego a 0)
+    #S: no retorna; despacha la habilidad segun unidad.tipo y reinicia el cooldown
+    #R: ninguna
+    def activar_habilidad_unidad(self, unidad):
+        habilidades = {
+            "soldado": self._habilidad_ataque_doble,
+            "tanque":  self._habilidad_escudo_temporal,
+            "rapida":  self._habilidad_aumento_velocidad,
+            "sanador": self._habilidad_curar_aliados,
+        }
+        accion = habilidades.get(unidad.tipo)
+        if accion:
+            accion(unidad)
+        # Reiniciamos el cooldown para que la habilidad pueda volver a activarse.
+        unidad.tiempo_restante = unidad.cooldown_ms
+
+    #E: unidad (Soldado)
+    #S: no retorna; duplica el dano del soldado por un breve periodo (flag en la unidad)
+    #R: ninguna
+    def _habilidad_ataque_doble(self, unidad):
+        # Marcamos la unidad para que el motor sepa que debe aplicar el dano dos veces
+        # en el proximo golpe. El motor limpia el flag despues de aplicarlo.
+        unidad.ataque_doble_activo = True
+
+    #E: unidad (Tanque)
+    #S: no retorna; activa el escudo temporal del tanque
+    #R: ninguna
+    def _habilidad_escudo_temporal(self, unidad):
+        # El escudo absorbe hasta 80 puntos de dano. El motor descuenta primero del
+        # escudo y solo el exceso le pega a la vida de la unidad.
+        unidad.escudo_activo = True
+        unidad.escudo_hp = 80   # puntos que absorbe antes de romperse
+
+    #E: unidad (Rapida)
+    #S: no retorna; duplica la velocidad de la unidad rapida por 3 segundos
+    #R: ninguna
+    def _habilidad_aumento_velocidad(self, unidad):
+        # Guardamos la velocidad base para restaurarla cuando expire el boost.
+        if not hasattr(unidad, 'velocidad_base'):
+            unidad.velocidad_base = unidad.velocidad
+        unidad.velocidad = unidad.velocidad_base * 2
+        # El motor descuenta este timer cada tick y restaura la velocidad al llegar a 0.
+        unidad.boost_restante_ms = 3000
+
+    #E: unidad (Sanador)
+    #S: no retorna; cura 30 puntos de vida a todas las unidades aliadas en alcance (3 casillas)
+    #R: ninguna
+    def _habilidad_curar_aliados(self, unidad):
+        CURACION = 30
+        ALCANCE_PX = 3 * constantes.TAM_CELDA   # 3 casillas en pixeles
+        for aliada in self.pantalla.unidades:
+            if aliada is unidad or aliada.esta_muerta():
+                continue
+            # Distancia euclidiana entre el sanador y la aliada (en pixeles).
+            dx = aliada.x - unidad.x
+            dy = aliada.y - unidad.y
+            distancia = (dx ** 2 + dy ** 2) ** 0.5
+            if distancia <= ALCANCE_PX:
+                # Curamos sin exceder la vida maxima.
+                aliada.vida = min(aliada.vida + CURACION, aliada.vida_max)
