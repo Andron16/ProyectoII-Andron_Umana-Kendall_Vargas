@@ -16,7 +16,7 @@ class Juego:
     FASE_FIN = "fin_ronda"               # se evalua el ganador de la ronda
 
     # --- Parametros de economia y partida (balance provisional) ---
-    DINERO_INICIAL = 500       # dinero al empezar la partida (ronda 1)
+    DINERO_INICIAL = 1500       # dinero al empezar la partida (ronda 1)
     DINERO_POR_RONDA = 150     # se suma al inicio de cada ronda siguiente
     RONDAS_PARA_GANAR = 3      # primero en ganar 3 rondas gana la partida
 
@@ -309,6 +309,7 @@ class Juego:
                         unidad.ataque_doble_activo = False
                     self.pantalla.base.vida -= dano
                     self.registrar_dano_atacante(dano)
+                    self._efecto_dano(cx_base, cy_base)
                     unidad.tiempo_ataque_restante = unidad.cooldown_ataque_ms
                 continue
 
@@ -343,6 +344,7 @@ class Juego:
                         dano = exceso
                     obstaculo.vida -= dano
                     unidad.tiempo_ataque_restante = unidad.cooldown_ataque_ms
+                    self._efecto_dano(unidad.x, unidad.y)
                     if obstaculo.vida <= 0:
                         obstaculo.borrar(canvas)
                         if obstaculo in self.pantalla.torres:
@@ -413,6 +415,7 @@ class Juego:
                     dano = exceso
                 objetivo.vida -= dano
                 proy.activo = False
+                self._efecto_dano(objetivo.x, objetivo.y)
                 proy.borrar(canvas)
                 self.pantalla.proyectiles.remove(proy)
 
@@ -450,6 +453,13 @@ class Juego:
             self.detener_combate()
             self.registrar_victoria_ronda(ganador)
             self.pantalla.refrescar_barra()
+            # Mensaje de fin de ronda.
+            if ganador == "defensor":
+                msg = "¡El Defensor gana la ronda!\nTodas las unidades fueron eliminadas."
+            else:
+                msg = "¡El Atacante gana la ronda!\nLa base fue destruida."
+            from tkinter import messagebox
+            messagebox.showinfo("Fin de ronda " + str(self.ronda - 1), msg)
             fin_partida = self.evaluar_fin_de_partida()
             if fin_partida:
                 self.cerrar_partida(fin_partida)
@@ -485,6 +495,8 @@ class Juego:
         self.pantalla.base.vida = self.pantalla.base.vida_max
         self.pantalla.base.borrar(canvas)
         self.pantalla.base.dibujar(canvas, constantes.TAM_CELDA)
+        # Rehabilitamos el boton de fase para la nueva ronda.
+        self.pantalla.btn_fase.config(text="Terminar construcción", state="normal")
 
     #E: ganador_partida (str: "defensor" o "atacante")
     #S: no retorna; muestra la pantalla de fin de partida
@@ -499,11 +511,9 @@ class Juego:
                                      self.victorias_defensor,
                                      self.victorias_atacante))
     
-    # ===================================================================
     # HABILIDADES DE TORRES
     # Mismo patron que activar_habilidad_unidad: se despacha por tipo.
     # Una habilidad distinta por cada tipo de torre, como pide el enunciado.
-    # ===================================================================
 
     #E: torre (Torre cuyo cooldown llego a 0)
     #S: no retorna; despacha la habilidad segun torre.tipo
@@ -608,3 +618,16 @@ class Juego:
         if objetivo:
             # Reparamos sin exceder la vida maxima.
             objetivo.vida = min(objetivo.vida + 40, objetivo.vida_max)
+
+    #E: x, y (float, posicion en px donde aparece el efecto)
+    #S: no retorna; dibuja un circulo rojo pequeno que desaparece gradualmente
+    #R: ninguna
+    def _efecto_dano(self, x, y):
+        canvas = self.pantalla.canvas
+        r = 10   # radio del circulo
+        # Dibujamos el circulo rojo.
+        id_circulo = canvas.create_oval(x - r, y - r, x + r, y + r,
+                                        fill="#FF3333", outline="#FF0000",
+                                        width=2)
+        # Lo borramos despues de 350ms (efecto rapido y sutil).
+        self.controlador.after(350, lambda: canvas.delete(id_circulo))

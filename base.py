@@ -17,7 +17,7 @@ except ImportError:
 
 class Base:
 
-    VIDA_MAX = 1000     # objetivo principal: mucha vida (propuesto, a balancear)
+    VIDA_MAX = 750     # objetivo principal: mucha vida (propuesto, a balancear)
     CASILLAS = 3        # ocupa un cuadrado CASILLAS x CASILLAS centrado (propuesto)
 
     #E: faccion (objeto Faccion del defensor)

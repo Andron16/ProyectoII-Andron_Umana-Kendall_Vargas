@@ -80,10 +80,9 @@ class PantallaJuego(tk.Frame):
                                    fg=self.controlador.COLORES["acento2"])
         self.label_fase.pack(side="left", padx=(10, 20))
 
-        self.controlador.boton(barra_control, "Terminar construcción",
-                               self._terminar_construccion).pack(side="left", padx=4)
-        self.controlador.boton(barra_control, "Terminar colocación",
-                               self._terminar_colocacion).pack(side="left", padx=4)
+        self.btn_fase = self.controlador.boton(barra_control, "Terminar construcción",
+                                               self._terminar_fase)
+        self.btn_fase.pack(side="left", padx=4)
 
         self.canvas.pack(side="left", padx=(10, 0), pady=10)
         self._dibujar_cuadricula()
@@ -276,19 +275,46 @@ class PantallaJuego(tk.Frame):
         else:
             self.label_fase.config(text="▶ Fase: ATACANTE coloca unidades")
 
-    #E: event (clic de Tkinter, con event.x/event.y en pixeles del Canvas)
-    #S: no retorna; intenta colocar el item seleccionado en la casilla clicada
-    #R: requiere item seleccionado, fase correcta, casilla libre y dinero suficiente
+    #E: event (clic izquierdo, con event.x/event.y en pixeles del Canvas)
+    #S: no retorna; coloca un item en la casilla si esta vacia, o lo elimina si ya hay algo
+    #R: respeta la fase activa y el dinero disponible
     def _click_mapa(self, event):
-        if self.item_seleccionado is None:
-            return
-        tipo, categoria = self.item_seleccionado
         fila, columna = constantes.pixel_a_casilla(event.x, event.y)
-
         if not constantes.casilla_valida(fila, columna):
             return
 
-        # La categoria debe coincidir con la fase activa.
+        # Primero revisamos si ya hay algo en esa casilla para eliminarlo.
+        if self.fase_construccion == "defensor":
+            for t in self.torres:
+                if t.fila == fila and t.columna == columna:
+                    t.borrar(self.canvas)
+                    self.torres.remove(t)
+                    self.juego.dinero_defensor += t.costo
+                    self._actualizar_estado()
+                    return
+            for m in self.muros:
+                if m.fila == fila and m.columna == columna:
+                    m.borrar(self.canvas)
+                    self.muros.remove(m)
+                    self.juego.dinero_defensor += m.costo
+                    self._actualizar_estado()
+                    return
+
+        elif self.fase_construccion == "atacante":
+            for u in self.unidades:
+                fila_u, col_u = constantes.pixel_a_casilla(u.x, u.y)
+                if fila_u == fila and col_u == columna:
+                    u.borrar(self.canvas)
+                    self.unidades.remove(u)
+                    self.juego.dinero_atacante += u.costo
+                    self._actualizar_estado()
+                    return
+
+        # Si la casilla estaba vacia, intentamos colocar el item seleccionado.
+        if self.item_seleccionado is None:
+            return
+        tipo, categoria = self.item_seleccionado
+
         if categoria in ("muro", "torre") and self.fase_construccion != "defensor":
             return
         if categoria == "unidad" and self.fase_construccion != "atacante":
@@ -391,3 +417,19 @@ class PantallaJuego(tk.Frame):
                     "  —  " +
                     str(self.juego.victorias_atacante))
         self.label_marcador.config(text=marcador)
+    
+    #E: (no recibe parametros)
+    #S: no retorna; ejecuta la accion correcta segun la fase actual
+    #R: ninguna
+    def _terminar_fase(self):
+        if self.fase_construccion == "defensor":
+            self.juego.terminar_construccion()
+            self.cambiar_fase("atacante")
+            # Cambiamos el texto del boton para la fase del atacante.
+            self.btn_fase.config(text="Terminar colocación")
+            self._actualizar_estado()
+        else:
+            self.juego.terminar_colocacion()
+            self.juego.iniciar_combate()
+            # Deshabilitamos el boton durante el combate.
+            self.btn_fase.config(state="disabled")
