@@ -28,7 +28,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Defensa y Asalto de Base")
-        self.geometry("1000x720")
+        self.geometry("1000x790")
         self.resizable(False, False)
         self.configure(bg=self.COLORES["fondo"])
 
@@ -69,7 +69,7 @@ class App(tk.Tk):
             bg=self.COLORES["boton"], fg=self.COLORES["texto"],
             activebackground=self.COLORES["boton_activo"],
             activeforeground=self.COLORES["acento"],
-            relief="flat", bd=0, padx=10, pady=12, cursor="hand2",
+            relief="flat", bd=0, padx=20, pady=12, cursor="hand2",
             highlightthickness=1, highlightbackground=self.COLORES["panel"]
         )
 

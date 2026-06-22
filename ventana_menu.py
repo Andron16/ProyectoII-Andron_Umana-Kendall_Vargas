@@ -41,9 +41,9 @@ class PantallaMenu(tk.Frame):
 
         # Titulo y subtitulo (texto dibujado sobre el Canvas).
         cx = self.ANCHO / 2
-        self.canvas.create_text(cx, 150, text="Defensa y Asalto de Base",
+        self.canvas.create_text(cx, 150, text="Clash No Royale",
                                 fill=c["acento"], font=("Trebuchet MS", 40, "bold"))
-        self.canvas.create_text(cx, 200, text="Juego de estrategia para dos jugadores",
+        self.canvas.create_text(cx, 200, text="By Andron y Palma",
                                 fill=c["tenue"], font=("Trebuchet MS", 16))
 
         # Botones: son widgets reales incrustados en el Canvas con create_window.

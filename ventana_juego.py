@@ -57,15 +57,44 @@ class PantallaJuego(tk.Frame):
         else:
             bg_mapa = c["fondo"]
 
-        # Canvas del mapa: 15x15 casillas (medidas tomadas de constantes).
+        # --- Zona del mapa + panel lateral ---
+        zona = tk.Frame(self, bg=c["fondo"])
+        zona.pack(fill="both", expand=True)
+
+        # Color de fondo del mapa segun la faccion del defensor.
+        if self.controlador.faccion_defensor:
+            bg_mapa = self.controlador.faccion_defensor.obtener("fondo")["principal"]
+        else:
+            bg_mapa = c["fondo"]
+
+        # Canvas del mapa: va a la IZQUIERDA.
         self.canvas = tk.Canvas(zona, width=constantes.ANCHO, height=constantes.ALTO,
                                 bg=bg_mapa, highlightthickness=0)
-        self.canvas.pack(pady=10)   # sin fill -> queda centrado horizontalmente
+        # Barra de control entre el tablero y el mapa.
+        barra_control = tk.Frame(zona, bg=self.controlador.COLORES["fondo"])
+        barra_control.pack(side="top", fill="x", padx=10, pady=(6, 0))
+
+        self.label_fase = tk.Label(barra_control, text="▶ Fase: DEFENSOR construye",
+                                   font=("Trebuchet MS", 11, "bold"),
+                                   bg=self.controlador.COLORES["fondo"],
+                                   fg=self.controlador.COLORES["acento2"])
+        self.label_fase.pack(side="left", padx=(10, 20))
+
+        self.controlador.boton(barra_control, "Terminar construcción",
+                               self._terminar_construccion).pack(side="left", padx=4)
+        self.controlador.boton(barra_control, "Terminar colocación",
+                               self._terminar_colocacion).pack(side="left", padx=4)
+
+        self.canvas.pack(side="left", padx=(10, 0), pady=10)
         self._dibujar_cuadricula()
         self._dibujar_base()
-
         self.canvas.bind("<Button-1>", self._click_mapa)
-        self._construir_tienda(zona)
+
+        # Panel lateral: va a la DERECHA del mapa.
+        panel_lateral = tk.Frame(zona, bg=c["panel"], width=370)
+        panel_lateral.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+        panel_lateral.pack_propagate(False)
+        self._construir_tienda(panel_lateral)
 
     #E: (usa self.canvas y constantes)
     #S: no retorna; dibuja las lineas de la cuadricula 15x15 sobre el Canvas
@@ -161,56 +190,68 @@ class PantallaJuego(tk.Frame):
             tk.Frame(fila_fac2, bg=fa.obtener("torre")["principal"],
                      width=14, height=14).pack(side="left", padx=(5, 0))
 
-    # =================================================================
-    # TIENDA Y COLOCACION (Persona B - Fase 5)
-    # =================================================================
 
-    #E: contenedor (Frame donde se monta la tienda, debajo del Canvas)
+    # TIENDA Y COLOCACION
+ 
+    #E: contenedor (Frame lateral donde se monta la tienda)
     #S: no retorna; arma los paneles de compra del defensor y del atacante
     #R: ninguna
     def _construir_tienda(self, contenedor):
         c = self.controlador.COLORES
 
-        self.panel_tienda = tk.Frame(contenedor, bg=c["fondo"])
-        self.panel_tienda.pack(fill="x", pady=(0, 10))
+        # --- Titulo de fase ---
+        tk.Label(contenedor, text="TIENDA", font=("Trebuchet MS", 14, "bold"),
+                 bg=c["panel"], fg=c["acento"]).pack(pady=(16, 4))
 
-        # --- Panel del defensor: muro + 4 tipos de torre ---
-        self.panel_defensor = tk.LabelFrame(self.panel_tienda, text="Construccion (Defensor)",
-                                            bg=c["panel"], fg=c["texto"])
-        self.panel_defensor.pack(side="left", expand=True, fill="both", padx=6)
+        
 
-        tk.Button(self.panel_defensor, text="Muro\n$" + str(Muro.COSTO),
-                  command=lambda: self._seleccionar_item("muro", "muro")
-                  ).pack(side="left", padx=4, pady=6)
+        # --- Panel del defensor: muro + 4 torres ---
+        tk.Label(contenedor, text="Defensor", font=("Trebuchet MS", 11),
+                 bg=c["panel"], fg=c["tenue"]).pack(anchor="w", padx=14)
+
+        self.panel_defensor = tk.Frame(contenedor, bg=c["panel"])
+        self.panel_defensor.pack(fill="x", padx=10, pady=(2, 10))
+
+        tk.Button(self.panel_defensor, text="Muro  $" + str(Muro.COSTO),
+                  command=lambda: self._seleccionar_item("muro", "muro"),
+                  font=("Trebuchet MS", 10), bg=c["boton"], fg=c["texto"],
+                  relief="flat", bd=0, padx=8, pady=6, cursor="hand2"
+                  ).pack(fill="x", pady=2)
         for tipo, datos in Torre.STATS.items():
-            tk.Button(self.panel_defensor, text=datos["nombre"] + "\n$" + str(datos["costo"]),
-                      command=lambda t=tipo: self._seleccionar_item(t, "torre")
-                      ).pack(side="left", padx=4, pady=6)
+            tk.Button(self.panel_defensor,
+                      text=datos["nombre"] + "  $" + str(datos["costo"]),
+                      command=lambda t=tipo: self._seleccionar_item(t, "torre"),
+                      font=("Trebuchet MS", 10), bg=c["boton"], fg=c["texto"],
+                      relief="flat", bd=0, padx=8, pady=6, cursor="hand2"
+                      ).pack(fill="x", pady=2)
 
-        # --- Panel del atacante: 4 tipos de unidad ---
-        self.panel_atacante = tk.LabelFrame(self.panel_tienda, text="Compra (Atacante)",
-                                            bg=c["panel"], fg=c["texto"])
-        self.panel_atacante.pack(side="left", expand=True, fill="both", padx=6)
+        # --- Separador ---
+        tk.Frame(contenedor, bg=c["boton"], height=1).pack(fill="x", padx=10, pady=6)
+
+        # --- Panel del atacante: 4 unidades ---
+        tk.Label(contenedor, text="Atacante", font=("Trebuchet MS", 11),
+                 bg=c["panel"], fg=c["tenue"]).pack(anchor="w", padx=14)
+
+        self.panel_atacante = tk.Frame(contenedor, bg=c["panel"])
+        self.panel_atacante.pack(fill="x", padx=10, pady=(2, 10))
 
         for tipo, datos in Unidad.STATS.items():
-            tk.Button(self.panel_atacante, text=datos["nombre"] + "\n$" + str(datos["costo"]),
-                      command=lambda t=tipo: self._seleccionar_item(t, "unidad")
-                      ).pack(side="left", padx=4, pady=6)
+            tk.Button(self.panel_atacante,
+                      text=datos["nombre"] + "  $" + str(datos["costo"]),
+                      command=lambda t=tipo: self._seleccionar_item(t, "unidad"),
+                      font=("Trebuchet MS", 10), bg=c["boton"], fg=c["texto"],
+                      relief="flat", bd=0, padx=8, pady=6, cursor="hand2"
+                      ).pack(fill="x", pady=2)
 
-        # --- Linea de estado: dinero, fase actual y item seleccionado ---
-        self.label_estado = tk.Label(contenedor, text="", font=("Trebuchet MS", 10),
-                                     bg=c["fondo"], fg=c["tenue"])
-        self.label_estado.pack(pady=(0, 4))
-        # _actualizar_estado se llama despues de que self.juego exista
+        # --- Separador ---
+        tk.Frame(contenedor, bg=c["boton"], height=1).pack(fill="x", padx=10, pady=6)
 
-        # Botones reales de control de fase.
-        frame_botones_fase = tk.Frame(contenedor, bg=self.controlador.COLORES["fondo"])
-        frame_botones_fase.pack(pady=(0, 6))
+        # --- Estado: dinero y seleccion ---
+        self.label_estado = tk.Label(contenedor, text="", font=("Trebuchet MS", 9),
+                                     bg=c["panel"], fg=c["tenue"], wraplength=340,
+                                     justify="left")
+        self.label_estado.pack(anchor="w", padx=14, pady=(0, 10))
 
-        self.controlador.boton(frame_botones_fase, "Terminar construcción",
-                               self._terminar_construccion).pack(side="left", padx=6)
-        self.controlador.boton(frame_botones_fase, "Terminar colocación",
-                               self._terminar_colocacion).pack(side="left", padx=6)
 
     #E: tipo (str, clave en STATS o "muro"), categoria (str: "muro"/"torre"/"unidad")
     #S: no retorna; guarda la seleccion actual para usarla al hacer clic en el mapa
@@ -229,6 +270,11 @@ class PantallaJuego(tk.Frame):
                  "  |  Dinero atacante: $" + str(self.juego.dinero_atacante) +
                  "  |  Seleccionado: " + sel)
         self.label_estado.config(text=texto)
+        # Actualizamos el indicador de fase.
+        if self.fase_construccion == "defensor":
+            self.label_fase.config(text="▶ Fase: DEFENSOR construye")
+        else:
+            self.label_fase.config(text="▶ Fase: ATACANTE coloca unidades")
 
     #E: event (clic de Tkinter, con event.x/event.y en pixeles del Canvas)
     #S: no retorna; intenta colocar el item seleccionado en la casilla clicada

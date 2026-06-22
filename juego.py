@@ -498,3 +498,113 @@ class Juego:
             lambda p, c: PantallaFin(p, c, nombre, ganador_partida,
                                      self.victorias_defensor,
                                      self.victorias_atacante))
+    
+    # ===================================================================
+    # HABILIDADES DE TORRES
+    # Mismo patron que activar_habilidad_unidad: se despacha por tipo.
+    # Una habilidad distinta por cada tipo de torre, como pide el enunciado.
+    # ===================================================================
+
+    #E: torre (Torre cuyo cooldown llego a 0)
+    #S: no retorna; despacha la habilidad segun torre.tipo
+    #R: ninguna
+    def activar_habilidad_torre(self, torre):
+        habilidades = {
+            "basica":  self._habilidad_disparo_doble,
+            "pesada":  self._habilidad_dano_area,
+            "magica":  self._habilidad_congelar,
+            "soporte": self._habilidad_reparar,
+        }
+        accion = habilidades.get(torre.tipo)
+        if accion:
+            accion(torre)
+
+    #E: torre (Torre basica)
+    #S: no retorna; dispara dos proyectiles hacia las dos unidades mas cercanas en alcance
+    #R: ninguna
+    def _habilidad_disparo_doble(self, torre):
+        from proyectil import Proyectil
+        canvas = self.pantalla.canvas
+        cx_t, cy_t = constantes.casilla_a_centro(torre.fila, torre.columna)
+        alcance_px = torre.alcance * constantes.TAM_CELDA
+
+        # Ordenamos las unidades por distancia y tomamos las dos mas cercanas.
+        vivas = [u for u in self.pantalla.unidades if not u.esta_muerta()]
+        cercanas = sorted(vivas,
+                          key=lambda u: (u.x - cx_t) ** 2 + (u.y - cy_t) ** 2)
+        objetivos = [u for u in cercanas
+                     if ((u.x - cx_t) ** 2 + (u.y - cy_t) ** 2) ** 0.5 <= alcance_px][:2]
+
+        for objetivo in objetivos:
+            proy = Proyectil(cx_t, cy_t, objetivo, torre.dano, torre.faccion)
+            proy.dibujar(canvas, constantes.TAM_CELDA)
+            self.pantalla.proyectiles.append(proy)
+
+    #E: torre (Torre pesada)
+    #S: no retorna; aplica dano a todas las unidades dentro de su alcance
+    #R: ninguna
+    def _habilidad_dano_area(self, torre):
+        cx_t, cy_t = constantes.casilla_a_centro(torre.fila, torre.columna)
+        alcance_px = torre.alcance * constantes.TAM_CELDA
+
+        for unidad in list(self.pantalla.unidades):
+            if unidad.esta_muerta():
+                continue
+            dist = ((unidad.x - cx_t) ** 2 + (unidad.y - cy_t) ** 2) ** 0.5
+            if dist <= alcance_px:
+                dano = torre.dano
+                # Respeta el escudo si existe.
+                if getattr(unidad, 'escudo_activo', False):
+                    exceso = max(0, dano - unidad.escudo_hp)
+                    unidad.escudo_hp -= dano
+                    if unidad.escudo_hp <= 0:
+                        unidad.escudo_activo = False
+                    dano = exceso
+                unidad.vida -= dano
+                if unidad.esta_muerta():
+                    unidad.borrar(self.pantalla.canvas)
+                    self.pantalla.unidades.remove(unidad)
+                    self.recompensa_por_eliminar(unidad)
+
+    #E: torre (Torre magica)
+    #S: no retorna; congela la unidad mas cercana en alcance por 2 segundos
+    #R: ninguna
+    def _habilidad_congelar(self, torre):
+        cx_t, cy_t = constantes.casilla_a_centro(torre.fila, torre.columna)
+        alcance_px = torre.alcance * constantes.TAM_CELDA
+
+        objetivo = None
+        menor_dist = float('inf')
+        for unidad in self.pantalla.unidades:
+            if unidad.esta_muerta() or unidad.congelada:
+                continue
+            dist = ((unidad.x - cx_t) ** 2 + (unidad.y - cy_t) ** 2) ** 0.5
+            if dist <= alcance_px and dist < menor_dist:
+                menor_dist = dist
+                objetivo = unidad
+
+        if objetivo:
+            objetivo.congelada = True
+            objetivo.tiempo_congelada = 2000   # 2 segundos en ms
+
+    #E: torre (Torre soporte)
+    #S: no retorna; repara 40 HP a la torre aliada mas cercana en alcance
+    #R: ninguna
+    def _habilidad_reparar(self, torre):
+        cx_t, cy_t = constantes.casilla_a_centro(torre.fila, torre.columna)
+        alcance_px = torre.alcance * constantes.TAM_CELDA
+
+        objetivo = None
+        menor_dist = float('inf')
+        for aliada in self.pantalla.torres:
+            if aliada is torre or aliada.esta_destruida():
+                continue
+            cx_a, cy_a = constantes.casilla_a_centro(aliada.fila, aliada.columna)
+            dist = ((cx_a - cx_t) ** 2 + (cy_a - cy_t) ** 2) ** 0.5
+            if dist <= alcance_px and dist < menor_dist:
+                menor_dist = dist
+                objetivo = aliada
+
+        if objetivo:
+            # Reparamos sin exceder la vida maxima.
+            objetivo.vida = min(objetivo.vida + 40, objetivo.vida_max)
