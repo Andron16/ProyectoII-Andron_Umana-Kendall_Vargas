@@ -624,7 +624,7 @@ class Juego:
     #R: ninguna
     def _efecto_dano(self, x, y):
         canvas = self.pantalla.canvas
-        r = 10   # radio del circulo
+        r = 6   # radio del circulo
         # Dibujamos el circulo rojo.
         id_circulo = canvas.create_oval(x - r, y - r, x + r, y + r,
                                         fill="#FF3333", outline="#FF0000",

@@ -23,6 +23,7 @@ class PantallaMenu(tk.Frame):
         self.haces = []          # lista de haces activos (cada uno es un dict)
         self._construir()
         self._animar()           # arranca el bucle de animacion
+        self.controlador.reproducir_musica("assets/sonidos/menu.wav")
 
     #E: (usa el controlador)
     #S: no retorna; arma el Canvas, los haces y los widgets del menu

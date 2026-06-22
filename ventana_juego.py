@@ -33,6 +33,7 @@ class PantallaJuego(tk.Frame):
         from juego import Juego
         self.juego = Juego(self)
         self._actualizar_estado()
+        self.controlador.reproducir_musica("assets/sonidos/combate.wav")
 
     #E: (usa el controlador)
     #S: no retorna; arma la barra superior y el Canvas del mapa
@@ -46,16 +47,6 @@ class PantallaJuego(tk.Frame):
         self.barra.pack_propagate(False)   # respeta la altura fija de la barra
 
         self._construir_barra()
-
-        # --- Zona del mapa: contiene el Canvas centrado ---
-        zona = tk.Frame(self, bg=c["fondo"])
-        zona.pack(fill="both", expand=True)
-
-        # Color de fondo del mapa segun la faccion del defensor (si existe).
-        if self.controlador.faccion_defensor:
-            bg_mapa = self.controlador.faccion_defensor.obtener("fondo")["principal"]
-        else:
-            bg_mapa = c["fondo"]
 
         # --- Zona del mapa + panel lateral ---
         zona = tk.Frame(self, bg=c["fondo"])
@@ -108,14 +99,18 @@ class PantallaJuego(tk.Frame):
         # Lineas verticales (una por cada columna + el borde derecho).
         for col in range(constantes.COLUMNAS + 1):
             x = col * constantes.TAM_CELDA
-            self.canvas.create_line(x, 0, x, constantes.ALTO,
-                                    fill=color_linea, width=1, stipple="gray25")
+            grosor = 1
+            punteado = "gray25"
+            if self.controlador.faccion_defensor and self.controlador.faccion_defensor.nombre == "Futurista":
+                grosor = 1
+                punteado = "gray50"
+            self.canvas.create_line(x, 0, x, constantes.ALTO, fill=color_linea, width=grosor, stipple=punteado)
 
         # Lineas horizontales (una por cada fila + el borde inferior).
         for fila in range(constantes.FILAS + 1):
             y = fila * constantes.TAM_CELDA
             self.canvas.create_line(0, y, constantes.ANCHO, y,
-                                    fill=color_linea, width=1, stipple="gray25")
+                                    fill=color_linea, width=grosor, stipple=punteado)
 
     #E: (usa self.canvas y la faccion del defensor del controlador)
     #S: no retorna; crea la Base y la dibuja centrada en el mapa
@@ -429,7 +424,11 @@ class PantallaJuego(tk.Frame):
             self.btn_fase.config(text="Terminar colocación")
             self._actualizar_estado()
         else:
+            if len(self.unidades) == 0:
+                from tkinter import messagebox
+                messagebox.showwarning("Sin unidades",
+                                       "El atacante debe colocar al menos una unidad.")
+                return
             self.juego.terminar_colocacion()
             self.juego.iniciar_combate()
-            # Deshabilitamos el boton durante el combate.
             self.btn_fase.config(state="disabled")

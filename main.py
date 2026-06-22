@@ -6,6 +6,7 @@
 import tkinter as tk
 from gestor_jugadores import GestorJugadores
 from ventana_menu import PantallaMenu
+import pygame
 
 class App(tk.Tk):
 
@@ -27,6 +28,8 @@ class App(tk.Tk):
     #R: ninguna
     def __init__(self):
         super().__init__()
+        # Inicializamos pygame solo para audio.
+        pygame.mixer.init()
         self.title("Defensa y Asalto de Base")
         self.geometry("1000x790")
         self.resizable(False, False)
@@ -72,6 +75,18 @@ class App(tk.Tk):
             relief="flat", bd=0, padx=20, pady=12, cursor="hand2",
             highlightthickness=1, highlightbackground=self.COLORES["panel"]
         )
+    
+    #E: ruta (str) -> ruta del archivo de sonido, loop (bool) -> si se repite
+    #S: no retorna; detiene la musica anterior y reproduce la nueva
+    #R: si el archivo no existe, no hace nada (el juego sigue funcionando)
+    def reproducir_musica(self, ruta, loop=True):
+        try:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load(ruta)
+            # -1 = loop infinito, 0 = una sola vez.
+            pygame.mixer.music.play(-1 if loop else 0)
+        except Exception:
+            pass   # si el archivo no existe, el juego sigue sin audio
 
 # Punto de entrada: se ejecuta todo el juego desde aqui.
 if __name__ == "__main__":
