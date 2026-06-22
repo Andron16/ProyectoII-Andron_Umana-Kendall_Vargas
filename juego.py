@@ -304,12 +304,13 @@ class Juego:
             if distancia < constantes.TAM_CELDA:
                 # La unidad llego a la base: le aplica dano.
                 if unidad.tiempo_ataque_restante <= 0:
-                    dano = unidad.dano * (2 if getattr(unidad, 'ataque_doble_activo', False) else 1)
-                    if getattr(unidad, 'ataque_doble_activo', False):
+                    es_doble = getattr(unidad, 'ataque_doble_activo', False)
+                    dano = unidad.dano * (2 if es_doble else 1)
+                    if es_doble:
                         unidad.ataque_doble_activo = False
                     self.pantalla.base.vida -= dano
                     self.registrar_dano_atacante(dano)
-                    self._efecto_dano(cx_base, cy_base)
+                    self._efecto_dano(cx_base, cy_base, dorado=es_doble)
                     unidad.tiempo_ataque_restante = unidad.cooldown_ataque_ms
                 continue
 
@@ -333,8 +334,9 @@ class Juego:
             if obstaculo:
                 # La unidad ataca el obstaculo en vez de avanzar.
                 if unidad.tiempo_ataque_restante <= 0:
-                    dano = unidad.dano * (2 if getattr(unidad, 'ataque_doble_activo', False) else 1)
-                    if getattr(unidad, 'ataque_doble_activo', False):
+                    es_doble = getattr(unidad, 'ataque_doble_activo', False)
+                    dano = unidad.dano * (2 if es_doble else 1)
+                    if es_doble:
                         unidad.ataque_doble_activo = False
                     if getattr(obstaculo, 'escudo_activo', False):
                         exceso = max(0, dano - obstaculo.escudo_hp)
@@ -344,7 +346,7 @@ class Juego:
                         dano = exceso
                     obstaculo.vida -= dano
                     unidad.tiempo_ataque_restante = unidad.cooldown_ataque_ms
-                    self._efecto_dano(unidad.x, unidad.y)
+                    self._efecto_dano(unidad.x, unidad.y, dorado=es_doble)
                     if obstaculo.vida <= 0:
                         obstaculo.borrar(canvas)
                         if obstaculo in self.pantalla.torres:
@@ -619,15 +621,14 @@ class Juego:
             # Reparamos sin exceder la vida maxima.
             objetivo.vida = min(objetivo.vida + 40, objetivo.vida_max)
 
-    #E: x, y (float, posicion en px donde aparece el efecto)
-    #S: no retorna; dibuja un circulo rojo pequeno que desaparece gradualmente
+    #E: x, y (float, posicion en px), dorado (bool) -> True si el golpe es especial
+    #S: no retorna; dibuja un circulo de color que desaparece rapidamente
     #R: ninguna
-    def _efecto_dano(self, x, y):
+    def _efecto_dano(self, x, y, dorado=False):
         canvas = self.pantalla.canvas
-        r = 6   # radio del circulo
-        # Dibujamos el circulo rojo.
+        r = 6
+        color = "#FFD700" if dorado else "#FF3333"
+        borde = "#FFA500" if dorado else "#FF0000"
         id_circulo = canvas.create_oval(x - r, y - r, x + r, y + r,
-                                        fill="#FF3333", outline="#FF0000",
-                                        width=2)
-        # Lo borramos despues de 350ms (efecto rapido y sutil).
+                                        fill=color, outline=borde, width=2)
         self.controlador.after(350, lambda: canvas.delete(id_circulo))
