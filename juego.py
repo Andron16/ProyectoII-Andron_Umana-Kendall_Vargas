@@ -261,3 +261,240 @@ class Juego:
             if distancia <= ALCANCE_PX:
                 # Curamos sin exceder la vida maxima.
                 aliada.vida = min(aliada.vida + CURACION, aliada.vida_max)
+    # ===================================================================
+    # MOTOR DE COMBATE EN TIEMPO REAL
+    # ===================================================================
+
+    #E: (no recibe parametros)
+    #S: no retorna; activa el combate y arranca el bucle
+    #R: debe estar en FASE_COMBATE
+    def iniciar_combate(self):
+        self.combate_activo = True
+        self._paso_combate()
+
+    #E: (no recibe parametros)
+    #S: no retorna; detiene el bucle de combate
+    #R: ninguna
+    def detener_combate(self):
+        self.combate_activo = False
+
+    #E: (no recibe parametros)
+    #S: no retorna; ejecuta un tick del combate y se reprograma a si mismo
+    #R: se detiene si combate_activo es False o la pantalla ya no existe
+    def _paso_combate(self):
+        # Guard clause: cortamos si el combate termino o la pantalla fue destruida.
+        if not self.combate_activo or not self.pantalla.winfo_exists():
+            return
+
+        canvas = self.pantalla.canvas
+
+        # --- 1. Mover unidades hacia la base ---
+        cx_base, cy_base = constantes.casilla_a_centro(
+            constantes.FILA_BASE, constantes.COLUMNA_BASE)
+
+        for unidad in list(self.pantalla.unidades):
+            if unidad.esta_muerta() or unidad.congelada:
+                continue
+
+            # Vector hacia el centro de la base.
+            dx = cx_base - unidad.x
+            dy = cy_base - unidad.y
+            distancia = (dx ** 2 + dy ** 2) ** 0.5
+
+            if distancia < constantes.TAM_CELDA:
+                # La unidad llego a la base: le aplica dano.
+                if unidad.tiempo_ataque_restante <= 0:
+                    dano = unidad.dano * (2 if getattr(unidad, 'ataque_doble_activo', False) else 1)
+                    if getattr(unidad, 'ataque_doble_activo', False):
+                        unidad.ataque_doble_activo = False
+                    self.pantalla.base.vida -= dano
+                    self.registrar_dano_atacante(dano)
+                    unidad.tiempo_ataque_restante = unidad.cooldown_ataque_ms
+                continue
+
+            # Revisa si la siguiente casilla esta bloqueada.
+            paso = unidad.velocidad
+            nx = unidad.x + (dx / distancia) * paso
+            ny = unidad.y + (dy / distancia) * paso
+            fila_sig, col_sig = constantes.pixel_a_casilla(nx, ny)
+
+            obstaculo = None
+            for t in self.pantalla.torres:
+                if not t.esta_destruida() and t.fila == fila_sig and t.columna == col_sig:
+                    obstaculo = t
+                    break
+            if obstaculo is None:
+                for m in self.pantalla.muros:
+                    if not m.esta_destruido() and m.fila == fila_sig and m.columna == col_sig:
+                        obstaculo = m
+                        break
+
+            if obstaculo:
+                # La unidad ataca el obstaculo en vez de avanzar.
+                if unidad.tiempo_ataque_restante <= 0:
+                    dano = unidad.dano * (2 if getattr(unidad, 'ataque_doble_activo', False) else 1)
+                    if getattr(unidad, 'ataque_doble_activo', False):
+                        unidad.ataque_doble_activo = False
+                    if getattr(obstaculo, 'escudo_activo', False):
+                        exceso = max(0, dano - obstaculo.escudo_hp)
+                        obstaculo.escudo_hp -= dano
+                        if obstaculo.escudo_hp <= 0:
+                            obstaculo.escudo_activo = False
+                        dano = exceso
+                    obstaculo.vida -= dano
+                    unidad.tiempo_ataque_restante = unidad.cooldown_ataque_ms
+                    if obstaculo.vida <= 0:
+                        obstaculo.borrar(canvas)
+                        if obstaculo in self.pantalla.torres:
+                            self.pantalla.torres.remove(obstaculo)
+                            self.recompensa_destruir_torre()
+                        elif obstaculo in self.pantalla.muros:
+                            self.pantalla.muros.remove(obstaculo)
+            else:
+                # Casilla libre: avanzamos y movemos el sprite.
+                for id_item in unidad.id_items:
+                    canvas.move(id_item, nx - unidad.x, ny - unidad.y)
+                unidad.x = nx
+                unidad.y = ny
+
+        # --- 2. Torres disparan a unidades en alcance ---
+        for torre in self.pantalla.torres:
+            if torre.esta_destruida():
+                continue
+            cx_t, cy_t = constantes.casilla_a_centro(torre.fila, torre.columna)
+            alcance_px = torre.alcance * constantes.TAM_CELDA
+
+            objetivo = None
+            menor_dist = float('inf')
+            for unidad in self.pantalla.unidades:
+                if unidad.esta_muerta():
+                    continue
+                dx = unidad.x - cx_t
+                dy = unidad.y - cy_t
+                dist = (dx ** 2 + dy ** 2) ** 0.5
+                if dist <= alcance_px and dist < menor_dist:
+                    menor_dist = dist
+                    objetivo = unidad
+
+            if objetivo and torre.tiempo_ataque_restante <= 0:
+                from proyectil import Proyectil
+                proy = Proyectil(cx_t, cy_t, objetivo, torre.dano, torre.faccion)
+                proy.dibujar(canvas, constantes.TAM_CELDA)
+                self.pantalla.proyectiles.append(proy)
+                torre.tiempo_ataque_restante = torre.cooldown_ataque_ms
+
+        # --- 3. Mover proyectiles y detectar impactos ---
+        for proy in list(self.pantalla.proyectiles):
+            if not proy.activo:
+                proy.borrar(canvas)
+                self.pantalla.proyectiles.remove(proy)
+                continue
+
+            if proy.objetivo.esta_muerta():
+                proy.activo = False
+                proy.borrar(canvas)
+                self.pantalla.proyectiles.remove(proy)
+                continue
+
+            # Guardamos la posicion anterior para mover el sprite.
+            px_ant, py_ant = proy.x, proy.y
+            proy.mover()
+            for id_item in proy.id_items:
+                canvas.move(id_item, proy.x - px_ant, proy.y - py_ant)
+
+            if proy.impacto():
+                objetivo = proy.objetivo
+                dano = proy.dano
+                if getattr(objetivo, 'escudo_activo', False):
+                    exceso = max(0, dano - objetivo.escudo_hp)
+                    objetivo.escudo_hp -= dano
+                    if objetivo.escudo_hp <= 0:
+                        objetivo.escudo_activo = False
+                    dano = exceso
+                objetivo.vida -= dano
+                proy.activo = False
+                proy.borrar(canvas)
+                self.pantalla.proyectiles.remove(proy)
+
+                if objetivo.esta_muerta():
+                    objetivo.borrar(canvas)
+                    self.pantalla.unidades.remove(objetivo)
+                    self.recompensa_por_eliminar(objetivo)
+
+        # --- 4. Descontar cooldowns ---
+        TICK = 33
+        for unidad in self.pantalla.unidades:
+            unidad.tiempo_restante = max(0, unidad.tiempo_restante - TICK)
+            unidad.tiempo_ataque_restante = max(0, unidad.tiempo_ataque_restante - TICK)
+            if unidad.tiempo_restante == 0:
+                self.activar_habilidad_unidad(unidad)
+            if getattr(unidad, 'boost_restante_ms', 0) > 0:
+                unidad.boost_restante_ms -= TICK
+                if unidad.boost_restante_ms <= 0:
+                    unidad.velocidad = getattr(unidad, 'velocidad_base', unidad.velocidad)
+            if unidad.congelada:
+                unidad.tiempo_congelada = getattr(unidad, 'tiempo_congelada', 2000) - TICK
+                if unidad.tiempo_congelada <= 0:
+                    unidad.congelada = False
+
+        for torre in self.pantalla.torres:
+            torre.tiempo_restante = max(0, torre.tiempo_restante - TICK)
+            torre.tiempo_ataque_restante = max(0, torre.tiempo_ataque_restante - TICK)
+            if torre.tiempo_restante == 0:
+                self.activar_habilidad_torre(torre)
+                torre.tiempo_restante = torre.cooldown_ms
+
+        # --- 5. Evaluar fin de ronda ---
+        ganador = self.evaluar_fin_de_ronda()
+        if ganador:
+            self.detener_combate()
+            self.registrar_victoria_ronda(ganador)
+            self.pantalla.refrescar_barra()
+            fin_partida = self.evaluar_fin_de_partida()
+            if fin_partida:
+                self.cerrar_partida(fin_partida)
+                self._mostrar_fin_partida(fin_partida)
+            else:
+                self._limpiar_campo()
+                self.siguiente_ronda()
+                self.pantalla.refrescar_barra()
+                self.pantalla.cambiar_fase("defensor")
+            return
+
+        # Reprogramamos el siguiente tick.
+        self.controlador.after(TICK, self._paso_combate)
+
+    #E: (no recibe parametros)
+    #S: no retorna; borra todas las entidades del campo para la siguiente ronda
+    #R: ninguna
+    def _limpiar_campo(self):
+        canvas = self.pantalla.canvas
+        for t in self.pantalla.torres:
+            t.borrar(canvas)
+        for m in self.pantalla.muros:
+            m.borrar(canvas)
+        for u in self.pantalla.unidades:
+            u.borrar(canvas)
+        for p in self.pantalla.proyectiles:
+            p.borrar(canvas)
+        self.pantalla.torres.clear()
+        self.pantalla.muros.clear()
+        self.pantalla.unidades.clear()
+        self.pantalla.proyectiles.clear()
+        # Redibujamos la base para la nueva ronda.
+        self.pantalla.base.vida = self.pantalla.base.vida_max
+        self.pantalla.base.borrar(canvas)
+        self.pantalla.base.dibujar(canvas, constantes.TAM_CELDA)
+
+    #E: ganador_partida (str: "defensor" o "atacante")
+    #S: no retorna; muestra la pantalla de fin de partida
+    #R: ninguna
+    def _mostrar_fin_partida(self, ganador_partida):
+        from ventana_fin import PantallaFin
+        jd = self.controlador.jugador_defensor
+        ja = self.controlador.jugador_atacante
+        nombre = jd.nombre if ganador_partida == "defensor" else ja.nombre
+        self.controlador.mostrar(
+            lambda p, c: PantallaFin(p, c, nombre, ganador_partida,
+                                     self.victorias_defensor,
+                                     self.victorias_atacante))

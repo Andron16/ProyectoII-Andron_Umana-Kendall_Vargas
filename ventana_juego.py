@@ -25,12 +25,14 @@ class PantallaJuego(tk.Frame):
         self.torres = []
         self.muros = []
         self.unidades = []
-        self.item_seleccionado = None         # (tipo, categoria) elegido en la tienda
-        self.fase_construccion = "defensor"   # "defensor" o "atacante"; lo controla juego.py
-        self.dinero_defensor = 500            # PROVISIONAL: hasta que juego.py traiga la economia real
-        self.dinero_atacante = 500
+        self.proyectiles = []
+        self.item_seleccionado = None
+        self.fase_construccion = "defensor"
 
         self._construir()
+        from juego import Juego
+        self.juego = Juego(self)
+        self._actualizar_estado()
 
     #E: (usa el controlador)
     #S: no retorna; arma la barra superior y el Canvas del mapa
@@ -132,13 +134,15 @@ class PantallaJuego(tk.Frame):
         col_centro = tk.Frame(self.barra, bg=c["panel"])
         col_centro.grid(row=0, column=1, sticky="nsew", pady=10)
 
-        tk.Label(col_centro, text="RONDA 1",
+        self.label_ronda = tk.Label(col_centro, text="RONDA 1",
                  font=("Trebuchet MS", 13, "bold"),
-                 bg=c["panel"], fg=c["acento"]).pack()
-        # Marcador: victorias defensor vs atacante (de momento 0-0).
-        tk.Label(col_centro, text="0  —  0",
+                 bg=c["panel"], fg=c["acento"])
+        self.label_ronda.pack()
+
+        self.label_marcador = tk.Label(col_centro, text="0  —  0",
                  font=("Trebuchet MS", 22, "bold"),
-                 bg=c["panel"], fg=c["texto"]).pack()
+                 bg=c["panel"], fg=c["texto"])
+        self.label_marcador.pack()
 
         # --- Columna derecha: atacante ---
         col_atk = tk.Frame(self.barra, bg=c["panel"])
@@ -197,12 +201,16 @@ class PantallaJuego(tk.Frame):
         self.label_estado = tk.Label(contenedor, text="", font=("Trebuchet MS", 10),
                                      bg=c["fondo"], fg=c["tenue"])
         self.label_estado.pack(pady=(0, 4))
-        self._actualizar_estado()
+        # _actualizar_estado se llama despues de que self.juego exista
 
-        # Boton de prueba para alternar fase mientras juego.py no controla las rondas.
-        # PROVISIONAL: quitar/reemplazar cuando este conectado el flujo real de rondas.
-        tk.Button(contenedor, text="(prueba) Pasar a fase de ataque",
-                  command=self._alternar_fase_prueba).pack(pady=(0, 6))
+        # Botones reales de control de fase.
+        frame_botones_fase = tk.Frame(contenedor, bg=self.controlador.COLORES["fondo"])
+        frame_botones_fase.pack(pady=(0, 6))
+
+        self.controlador.boton(frame_botones_fase, "Terminar construcción",
+                               self._terminar_construccion).pack(side="left", padx=6)
+        self.controlador.boton(frame_botones_fase, "Terminar colocación",
+                               self._terminar_colocacion).pack(side="left", padx=6)
 
     #E: tipo (str, clave en STATS o "muro"), categoria (str: "muro"/"torre"/"unidad")
     #S: no retorna; guarda la seleccion actual para usarla al hacer clic en el mapa
@@ -211,14 +219,14 @@ class PantallaJuego(tk.Frame):
         self.item_seleccionado = (tipo, categoria)
         self._actualizar_estado()
 
-    #E: (usa dinero_defensor, dinero_atacante, fase_construccion, item_seleccionado)
+    #E: (usa dinero de juego.py, fase_construccion, item_seleccionado)
     #S: no retorna; refresca el texto de estado debajo de la tienda
     #R: ninguna
     def _actualizar_estado(self):
         sel = self.item_seleccionado[0] if self.item_seleccionado else "ninguno"
         texto = ("Fase: " + self.fase_construccion +
-                 "  |  Dinero defensor: $" + str(self.dinero_defensor) +
-                 "  |  Dinero atacante: $" + str(self.dinero_atacante) +
+                 "  |  Dinero defensor: $" + str(self.juego.dinero_defensor) +
+                 "  |  Dinero atacante: $" + str(self.juego.dinero_atacante) +
                  "  |  Seleccionado: " + sel)
         self.label_estado.config(text=texto)
 
@@ -267,12 +275,11 @@ class PantallaJuego(tk.Frame):
     def _colocar_muro(self, fila, columna):
         if not self._casilla_libre(fila, columna):
             return
-        if self.dinero_defensor < Muro.COSTO:
+        if not self.juego.gastar(Muro.COSTO, "defensor"):
             return
         muro = Muro(fila, columna, self.controlador.faccion_defensor)
         muro.dibujar(self.canvas, constantes.TAM_CELDA)
         self.muros.append(muro)
-        self.dinero_defensor -= Muro.COSTO
         self._actualizar_estado()
 
     #E: tipo (str, clave en Torre.STATS), fila (int), columna (int)
@@ -281,13 +288,11 @@ class PantallaJuego(tk.Frame):
     def _colocar_torre(self, tipo, fila, columna):
         if not self._casilla_libre(fila, columna):
             return
-        costo = Torre.STATS[tipo]["costo"]
-        if self.dinero_defensor < costo:
+        if not self.juego.gastar(Torre.STATS[tipo]["costo"], "defensor"):
             return
         torre = Torre(tipo, fila, columna, self.controlador.faccion_defensor)
         torre.dibujar(self.canvas, constantes.TAM_CELDA)
         self.torres.append(torre)
-        self.dinero_defensor -= costo
         self._actualizar_estado()
 
     #E: tipo (str, clave en Unidad.STATS), fila (int), columna (int)
@@ -298,14 +303,12 @@ class PantallaJuego(tk.Frame):
         es_borde = fila in (0, constantes.FILAS - 1) or columna in (0, constantes.COLUMNAS - 1)
         if not es_borde:
             return
-        costo = Unidad.STATS[tipo]["costo"]
-        if self.dinero_atacante < costo:
+        if not self.juego.gastar(Unidad.STATS[tipo]["costo"], "atacante"):
             return
         x, y = constantes.casilla_a_centro(fila, columna)
         unidad = Unidad(tipo, x, y, self.controlador.faccion_atacante)
         unidad.dibujar(self.canvas, constantes.TAM_CELDA)
         self.unidades.append(unidad)
-        self.dinero_atacante -= costo
         self._actualizar_estado()
 
     #E: nueva_fase (str: "defensor" o "atacante")
@@ -318,10 +321,27 @@ class PantallaJuego(tk.Frame):
         self.item_seleccionado = None
         self._actualizar_estado()
 
-    #E: (usa self.fase_construccion)
-    #S: no retorna; alterna entre fase "defensor" y "atacante"
-    #R: PROVISIONAL - solo para probar la tienda sin juego.py; quitar cuando este el flujo real
-    def _alternar_fase_prueba(self):
-        self.fase_construccion = "atacante" if self.fase_construccion == "defensor" else "defensor"
-        self.item_seleccionado = None
+    #E: (no recibe parametros)
+    #S: no retorna; cierra la fase de construccion y pasa al atacante
+    #R: debe estar en fase de construccion
+    def _terminar_construccion(self):
+        self.juego.terminar_construccion()
+        self.cambiar_fase("atacante")
         self._actualizar_estado()
+
+    #E: (no recibe parametros)
+    #S: no retorna; cierra la fase de colocacion e inicia el combate
+    #R: debe estar en fase de colocacion
+    def _terminar_colocacion(self):
+        self.juego.terminar_colocacion()
+        self.juego.iniciar_combate()
+    
+    #E: (lee ronda y victorias de self.juego)
+    #S: no retorna; actualiza el marcador y la ronda en la barra superior
+    #R: self.juego debe existir
+    def refrescar_barra(self):
+        self.label_ronda.config(text="RONDA " + str(self.juego.ronda))
+        marcador = (str(self.juego.victorias_defensor) +
+                    "  —  " +
+                    str(self.juego.victorias_atacante))
+        self.label_marcador.config(text=marcador)

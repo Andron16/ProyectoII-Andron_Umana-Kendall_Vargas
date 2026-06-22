@@ -14,13 +14,17 @@ class Unidad:
     # para activar la habilidad. La habilidad se ejecuta en juego.py.
     STATS = {
         "soldado": {"nombre": "Soldado", "costo": 75,  "vida": 100, "dano": 10,
-                    "velocidad": 1.6, "habilidad": "ataque_doble",     "cooldown_ms": 4000},
+                    "velocidad": 1.6, "habilidad": "ataque_doble",
+                    "cooldown_ms": 4000, "cooldown_ataque_ms": 800},
         "tanque":  {"nombre": "Tanque",  "costo": 200, "vida": 350, "dano": 25,
-                    "velocidad": 1.0, "habilidad": "escudo_temporal",  "cooldown_ms": 7000},
+                    "velocidad": 1.0, "habilidad": "escudo_temporal",
+                    "cooldown_ms": 7000, "cooldown_ataque_ms": 1500},
         "rapida":  {"nombre": "Rapida",  "costo": 100, "vida": 70,  "dano": 8,
-                    "velocidad": 2.6, "habilidad": "aumento_velocidad","cooldown_ms": 5000},
+                    "velocidad": 2.6, "habilidad": "aumento_velocidad",
+                    "cooldown_ms": 5000, "cooldown_ataque_ms": 600},
         "sanador": {"nombre": "Sanador", "costo": 120, "vida": 90,  "dano": 0,
-                    "velocidad": 1.6, "habilidad": "curar_aliados",    "cooldown_ms": 6000},
+                    "velocidad": 1.6, "habilidad": "curar_aliados",
+                    "cooldown_ms": 6000, "cooldown_ataque_ms": 999999},
     }
 
     #E: tipo (str: "soldado"/"tanque"/"rapida"/"sanador"), x (float), y (float), faccion (Faccion)
@@ -40,6 +44,8 @@ class Unidad:
         self.habilidad = s["habilidad"]        # juego.py lo usa para despachar
         self.cooldown_ms = s["cooldown_ms"]
         self.tiempo_restante = s["cooldown_ms"]  # juego.py lo descuenta; al llegar a 0, habilidad lista
+        self.tiempo_ataque_restante = s["cooldown_ataque_ms"]  # cooldown del ataque basico
+        self.cooldown_ataque_ms = s["cooldown_ataque_ms"]
         self.x = x                             # posicion en pixeles (centro del sprite)
         self.y = y
         self.faccion = faccion

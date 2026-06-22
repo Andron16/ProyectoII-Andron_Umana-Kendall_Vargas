@@ -13,13 +13,17 @@ class Torre:
     # alcance esta en casillas; cooldown_ms es el tiempo para activar la habilidad.
     STATS = {
         "basica":  {"nombre": "Torre basica",  "costo": 100, "vida": 150,
-                    "dano": 15, "alcance": 3, "habilidad": "disparo_doble", "cooldown_ms": 3000},
+                    "dano": 15, "alcance": 3, "habilidad": "disparo_doble",
+                    "cooldown_ms": 3000, "cooldown_ataque_ms": 1000},
         "pesada":  {"nombre": "Torre pesada",  "costo": 250, "vida": 400,
-                    "dano": 40, "alcance": 2, "habilidad": "dano_area",     "cooldown_ms": 5000},
+                    "dano": 40, "alcance": 2, "habilidad": "dano_area",
+                    "cooldown_ms": 5000, "cooldown_ataque_ms": 2000},
         "magica":  {"nombre": "Torre magica",  "costo": 180, "vida": 120,
-                    "dano": 8,  "alcance": 4, "habilidad": "congelar",      "cooldown_ms": 6000},
+                    "dano": 8,  "alcance": 4, "habilidad": "congelar",
+                    "cooldown_ms": 6000, "cooldown_ataque_ms": 1500},
         "soporte": {"nombre": "Torre soporte", "costo": 150, "vida": 130,
-                    "dano": 5,  "alcance": 3, "habilidad": "reparar",       "cooldown_ms": 7000},
+                    "dano": 5,  "alcance": 3, "habilidad": "reparar",
+                    "cooldown_ms": 7000, "cooldown_ataque_ms": 2000},
     }
 
     #E: tipo (str: "basica"/"pesada"/"magica"/"soporte"), fila (int), columna (int), faccion (Faccion)
@@ -39,6 +43,8 @@ class Torre:
         self.habilidad = s["habilidad"]        # juego.py lo usa para despachar
         self.cooldown_ms = s["cooldown_ms"]
         self.tiempo_restante = s["cooldown_ms"]  # juego.py lo descuenta; al llegar a 0, habilidad lista
+        self.tiempo_ataque_restante = s["cooldown_ataque_ms"]  # cooldown del disparo basico
+        self.cooldown_ataque_ms = s["cooldown_ataque_ms"]
         self.fila = fila
         self.columna = columna
         self.faccion = faccion
